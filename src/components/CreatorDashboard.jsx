@@ -383,7 +383,7 @@ export default function CreatorDashboard() {
             </p>
           </div>
           <span className="text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border border-purple-500/30 bg-purple-950/20 text-purple-400">
-            {CampaignService.isMock ? '⚡ Mock sandbox' : '🔥 Firestore Active'}
+            {CampaignService.isMock ? '⚡ Mock sandbox' : '🔥 Connected to server'}
           </span>
         </div>
 
@@ -486,7 +486,7 @@ export default function CreatorDashboard() {
                 </label>
                 <div className="flex rounded-xl overflow-hidden border border-slate-800 bg-slate-950">
                   <span className="bg-slate-900 border-r border-slate-800 text-[10px] md:text-xs text-slate-500 px-3 flex items-center">
-                    lessgoooo.vercel.app/match/
+                    /match/
                   </span>
                   <input
                     type="text"
@@ -506,7 +506,7 @@ export default function CreatorDashboard() {
                 {/* Real-time feedback alerts */}
                 {slug && slugStatus === 'available' && (
                   <span className="text-[10px] text-emerald-400 flex items-center gap-1">
-                    ✓ Link slug available: lessgoooo.vercel.app/match/{slug}
+                    ✓ Link slug available: /match/{slug}
                   </span>
                 )}
                 {slug && slugStatus === 'taken' && (

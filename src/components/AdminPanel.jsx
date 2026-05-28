@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useCampaign } from '../context/CampaignContext';
+import { auth, db } from '../firebase';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function AdminPanel() {
   const { navigate, CampaignService } = useCampaign();
@@ -7,6 +10,7 @@ export default function AdminPanel() {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(
     sessionStorage.getItem('lessgoooo_admin_unlocked') === 'true'
   );
+  const [adminEmailInput, setAdminEmailInput] = useState('');
   const [adminPasswordInput, setAdminPasswordInput] = useState('');
   const [authError, setAuthError] = useState(null);
 
@@ -35,16 +39,46 @@ export default function AdminPanel() {
     }
   }, [isAdminUnlocked]);
 
-  const handleAdminAuthSubmit = (e) => {
+  const handleAdminAuthSubmit = async (e) => {
     e.preventDefault();
     setAuthError(null);
-    const configuredPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'lessgoooo-super-admin-2026';
     
-    if (adminPasswordInput === configuredPassword) {
-      sessionStorage.setItem('lessgoooo_admin_unlocked', 'true');
-      setIsAdminUnlocked(true);
-    } else {
-      setAuthError('Invalid master admin password token.');
+    if (CampaignService.isMock) {
+      const configuredPassword = import.meta.env.VITE_ADMIN_PASSWORD || 'lessgoooo-super-admin-2026';
+      if (adminEmailInput === 'admin@lessgoooo.com' && adminPasswordInput === configuredPassword) {
+        sessionStorage.setItem('lessgoooo_admin_unlocked', 'true');
+        setIsAdminUnlocked(true);
+      } else {
+        setAuthError('Invalid sandbox mock admin email or password.');
+      }
+      return;
+    }
+
+    try {
+      const userCredential = await signInWithEmailAndPassword(auth, adminEmailInput.trim(), adminPasswordInput);
+      const uid = userCredential.user.uid;
+      const email = userCredential.user.email?.toLowerCase();
+
+      const uidDocRef = doc(db, 'admins', uid);
+      const uidDocSnap = await getDoc(uidDocRef);
+      
+      let isVerifiedAdmin = uidDocSnap.exists();
+
+      if (!isVerifiedAdmin && email) {
+        const emailDocRef = doc(db, 'admins', email);
+        const emailDocSnap = await getDoc(emailDocRef);
+        isVerifiedAdmin = emailDocSnap.exists();
+      }
+
+      if (isVerifiedAdmin) {
+        sessionStorage.setItem('lessgoooo_admin_unlocked', 'true');
+        setIsAdminUnlocked(true);
+      } else {
+        setAuthError('Access denied: authenticated user record is missing admin privileges in database collection.');
+      }
+    } catch (err) {
+      console.error(err);
+      setAuthError(`Authentication failed: ${err.message || 'Check credentials'}`);
     }
   };
 
@@ -58,30 +92,17 @@ export default function AdminPanel() {
 
   // Manual Overwrite/Delete action button
   const handleManualDelete = async (slug) => {
-    const confirm = window.confirm(`⚠️ Absolute Admin Action:\nAre you sure you want to immediately drop Firestore state, delete Vercel Blob binary targets, and revoke client rendering for "/match/${slug}"?`);
+    const confirm = window.confirm(`⚠️ Absolute Admin Action:\nAre you sure you want to permanently delete Firestore state, purge assets, and immediately release the slug "/match/${slug}" for reuse?`);
     if (!confirm) return;
 
     try {
-      // Soft-delete: flips document state to isActive: false and purges customize media strings/files immediately
-      await CampaignService.softDeleteCampaign(slug);
+      // Hard delete campaign document completely to free the slug immediately
+      await CampaignService.deleteCampaign(slug);
       
-      // Update local state display
-      setCampaignsList(prev => prev.map(c => {
-        if (c.slug === slug) {
-          return {
-            ...c,
-            isActive: false,
-            audioUrl: '/karthave.mp3',
-            partnerImgUrl: '/rithu.jpeg',
-            exhaustedImgUrl: '/adi.jpeg',
-            rejectionImgUrl: '/rejected.png',
-            profiles: []
-          };
-        }
-        return c;
-      }));
+      // Update local state display by removing the purged campaign
+      setCampaignsList(prev => prev.filter(c => c.slug !== slug));
 
-      alert(`Administrative purge successful. Client rendering for "/match/${slug}" is now frozen.`);
+      alert(`Administrative purge successful. Slug "/match/${slug}" is now released and fully reusable!`);
     } catch (err) {
       console.error(err);
       alert('Override action failed.');
@@ -156,7 +177,7 @@ export default function AdminPanel() {
               Admin Access Gate
             </h2>
             <p className="text-xs text-slate-400 font-medium max-w-xs mx-auto leading-relaxed">
-              Please input the master security password configured in your env registry to inspect platform analytics.
+              Please enter your registered administrative credentials to access the platform dashboard.
             </p>
           </div>
 
@@ -169,7 +190,20 @@ export default function AdminPanel() {
           <form onSubmit={handleAdminAuthSubmit} className="space-y-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                Master Security Password
+                Admin Email ID
+              </label>
+              <input
+                type="email"
+                required
+                placeholder="admin@lessgooo.com"
+                value={adminEmailInput}
+                onChange={(e) => setAdminEmailInput(e.target.value)}
+                className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-200 focus:outline-none focus:border-purple-500"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                Admin Password
               </label>
               <input
                 type="password"
@@ -185,7 +219,7 @@ export default function AdminPanel() {
               type="submit"
               className="w-full py-3 rounded-2xl bg-gradient-to-r from-purple-500 to-indigo-600 hover:from-purple-400 hover:to-indigo-500 text-white font-bold text-xs uppercase tracking-wider shadow-lg transition-transform active:scale-97 cursor-pointer"
             >
-              Verify Master Credentials
+              Verify Administrative Credentials
             </button>
           </form>
 

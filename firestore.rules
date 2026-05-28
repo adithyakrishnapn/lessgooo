@@ -2,6 +2,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // Helper function to check if the authenticated user is a registered Admin
+    function isAdmin() {
+      return request.auth != null && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.token.email))
+      );
+    }
+
+    // Helper function to check if a campaign is expired or inactive
+    function isCampaignExpired(campaign) {
+      return campaign.isActive == false || (request.time.toMillis() - campaign.createdAt) >= 24 * 60 * 60 * 1000;
+    }
+
     match /campaigns/{slug} {
       
       // 1. GET (Read single): Anyone can read a single campaign by slug.
@@ -10,8 +23,7 @@ service cloud.firestore {
       
       // 2. LIST (Query all): Block anonymous collection scanning / listing.
       // Prevents malicious actors from exporting/scraping all emails & links on your platform.
-      // Recommended: Require a verified admin auth token.
-      allow list: if true; // Set to 'if request.auth != null' when Firebase Auth is integrated.
+      allow list: if isAdmin();
 
       // 3. CREATE: Anyone can create a campaign, but only if the slug does not already exist.
       // Prevents overwriting or hijacking existing campaigns.
@@ -21,14 +33,22 @@ service cloud.firestore {
                     && request.resource.data.partnerName != null;
 
       // 4. UPDATE: Restrict modifications to the campaign:
-      // - The campaign must be active (isActive == true).
-      // - The updated creatorEmail must match the existing creatorEmail (prevents ownership hijack).
-      allow update: if resource.data.isActive == true 
-                    && request.resource.data.creatorEmail == resource.data.creatorEmail;
+      // - The campaign must be active (isActive == true) and email must be unchanged, OR
+      // - The existing campaign has expired/inactive (allows overwriting and re-using the slug), OR
+      // - The request must be from a verified Admin.
+      allow update: if (resource.data.isActive == true && request.resource.data.creatorEmail == resource.data.creatorEmail)
+                    || isCampaignExpired(resource.data)
+                    || isAdmin();
 
-      // 5. DELETE: Restrict administrative purge actions.
-      // Recommended: Restrict to authenticating admin users.
-      allow delete: if true; // Set to 'if request.auth != null && request.auth.token.admin == true' in production.
+      // 5. DELETE: Restrict administrative purge actions strictly to registered Admins.
+      allow delete: if isAdmin();
+    }
+
+    // Secure the Admins collection:
+    // Only authenticated administrative accounts themselves can read their own documents.
+    match /admins/{adminId} {
+      allow read: if request.auth != null && (request.auth.uid == adminId || request.auth.token.email == adminId || isAdmin());
+      allow write: if false; // Only allow creation/updates directly from the Firebase console (secure backend environment).
     }
   }
 }

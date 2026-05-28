@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 
 // Environment variables loaded from Vite config
 const firebaseConfig = {
@@ -19,12 +20,14 @@ const isFirebaseConfigured = !!(
 
 let db = null;
 let app = null;
+let auth = null;
 
 if (isFirebaseConfigured) {
   try {
     app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
     db = getFirestore(app);
-    console.log("🔥 lessgoooo initialized: Firebase Firestore integration active.");
+    auth = getAuth(app);
+    console.log("🔥 lessgoooo initialized: Firebase Firestore & Auth integration active.");
   } catch (error) {
     console.error("⚠️ Failed to initialize Firebase SDK:", error);
   }
@@ -248,14 +251,22 @@ export const CampaignService = {
       try {
         const docRef = doc(db, 'campaigns', normalized);
         const docSnap = await getDoc(docRef);
-        return !docSnap.exists();
+        if (!docSnap.exists()) return true;
+        
+        const data = docSnap.data();
+        const timeDiff = Date.now() - data.createdAt;
+        const isExpiredOrInactive = !data.isActive || timeDiff >= 24 * 60 * 60 * 1000;
+        return isExpiredOrInactive;
       } catch (err) {
         console.error("Firestore query error:", err);
         return false;
       }
     } else {
       const campaigns = getMockCampaigns();
-      return !campaigns[normalized];
+      if (!campaigns[normalized]) return true;
+      const data = campaigns[normalized];
+      const timeDiff = Date.now() - data.createdAt;
+      return !data.isActive || timeDiff >= 24 * 60 * 60 * 1000;
     }
   },
 
@@ -343,3 +354,5 @@ export const CampaignService = {
     }
   }
 };
+
+export { auth, db };
