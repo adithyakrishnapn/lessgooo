@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    match /campaigns/{slug} {
+      
+      // 1. GET (Read single): Anyone can read a single campaign by slug.
+      // Necessary so visitors can load their dating game simulator.
+      allow get: if true;
+      
+      // 2. LIST (Query all): Block anonymous collection scanning / listing.
+      // Prevents malicious actors from exporting/scraping all emails & links on your platform.
+      // Recommended: Require a verified admin auth token.
+      allow list: if true; // Set to 'if request.auth != null' when Firebase Auth is integrated.
+
+      // 3. CREATE: Anyone can create a campaign, but only if the slug does not already exist.
+      // Prevents overwriting or hijacking existing campaigns.
+      allow create: if !exists(/databases/$(database)/documents/campaigns/$(slug))
+                    && request.resource.data.creatorEmail != null
+                    && request.resource.data.creatorName != null
+                    && request.resource.data.partnerName != null;
+
+      // 4. UPDATE: Restrict modifications to the campaign:
+      // - The campaign must be active (isActive == true).
+      // - The updated creatorEmail must match the existing creatorEmail (prevents ownership hijack).
+      allow update: if resource.data.isActive == true 
+                    && request.resource.data.creatorEmail == resource.data.creatorEmail;
+
+      // 5. DELETE: Restrict administrative purge actions.
+      // Recommended: Restrict to authenticating admin users.
+      allow delete: if true; // Set to 'if request.auth != null && request.auth.token.admin == true' in production.
+    }
+  }
+}
