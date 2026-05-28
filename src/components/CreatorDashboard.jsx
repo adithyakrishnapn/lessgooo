@@ -376,7 +376,7 @@ export default function CreatorDashboard() {
         <div className="mb-6 flex justify-between items-center border-b border-slate-800/80 pb-4">
           <div>
             <h1 className="text-xl md:text-2xl font-black bg-gradient-to-r from-amber-400 via-pink-500 to-purple-500 bg-clip-text text-transparent tracking-wide">
-              lessgoooo SaaS Panel
+              lessgoo panel
             </h1>
             <p className="text-[10px] md:text-xs text-slate-400 font-medium">
               Generate fully customized dating swiper profiles without an account setup
